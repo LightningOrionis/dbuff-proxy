@@ -6,7 +6,7 @@ class ListedEnum(Enum):
     """Listed enum that inherits enum.Enum but implements list method to get all possible values."""
 
     @classmethod
-    def list(cls) -> List[Any]:
+    def list(cls) -> List[Any]:  # noqa
         """Return list of possible enum values."""
         return [c.value for c in cls]
 

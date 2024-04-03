@@ -26,11 +26,7 @@ types-all = "^1.0.0"
 flake8-bugbear = "^24.2.6"
 flake8-debugger = "^4.1.2"
 flake8-broken-line = "^1.0.0"
-flake8-builtins = "^2.4.0"
-flake8-variables-names = "^0.0.6"
 flake8-comments = "^0.1.2"
-flake8-todo = "^0.7"
-flake8-docstrings = "^1.7.0"
 
 [build-system]
 requires = ["poetry-core"]

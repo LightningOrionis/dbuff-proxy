@@ -5,31 +5,44 @@ from typing import List
 from bs4 import BeautifulSoup
 
 from app.constants import Team
-from app.schemas import PlayerMatch, PlayerProfile, Match, Record, BaseMatchHero, MatchInfo, AdvancedMatchHero
+from app.schemas import (
+    AdvancedMatchHero,
+    AggregatedMatchStats,
+    BaseMatchHero,
+    Match,
+    MatchInfo,
+    OverviewHero,
+    PlayerMatch,
+    PlayerProfile,
+    Record,
+)
 
 
 class DotabuffParser:
     """Dotabuff parser service."""
+
     def _parse_time(self, time_str: str) -> time:
-        """Parses time string into time object."""
+        """Parse time string into time object."""
         if time_str.count(":") == 1:
-            hours = 0
+            hours = "0"
             minutes, seconds = time_str.split(":")
         else:
             hours, minutes, seconds = time_str.split(":")
 
-        hours, minutes, seconds = int(hours), int(minutes), int(seconds)
+        return time(int(hours), int(minutes), int(seconds))
 
-        return time(hours, minutes, seconds)
-
-    def _parse_thousands_from_k(self, s: str) -> str:
-        """Parses K to thousands, e.g. 24.1K -> 24100."""
+    def _parse_int_from_k(self, s: str) -> int:
+        """Parse K to thousands, e.g. 24.1K -> 24100."""
         s = s.replace("k", "")
         s = s.replace("-", "0.0")
-        thousands, hundreds = [int(i) for i in s.split(".")]
+
+        try:
+            thousands, hundreds = [int(i) for i in s.split(".")]
+        except ValueError:
+            return int(s)
         return thousands * 1000 + hundreds * 100
 
-    def parse_matches(self, data: str) -> List[PlayerMatch]:
+    def parse_matches(self, data: bytes) -> List[PlayerMatch]:
         """Parse matches data."""
         matches = []
         soup = BeautifulSoup(data)
@@ -48,7 +61,7 @@ class DotabuffParser:
 
             # Match info
             game_mode = columns[4].div.text
-            lobby_type = columns[4].text.replace(game_mode, "")[:6]  # TODO: Add replace of x2
+            lobby_type = re.sub(r"x[1-5]", "", columns[4].text.replace(game_mode, "")[:6])
             timestamp = datetime.fromisoformat(columns[3].div.time["datetime"])
             duration = self._parse_time(columns[5].text)
 
@@ -60,7 +73,7 @@ class DotabuffParser:
 
         return matches
 
-    def parse_match(self, data: str) -> Match:
+    def parse_match(self, data: bytes) -> Match:
         """Parse match data."""
         soup = BeautifulSoup(data)
 
@@ -80,15 +93,24 @@ class DotabuffParser:
             *team_results.find("section", {"class": "dire"}).tbody.find_all("tr"),
         ]
         for result in results:
+            is_anonymous = False
             columns = result.find_all("td")
+
             hero_name = " ".join([word.capitalize() for word in columns[0].a["href"].split("/")[-1].split("-")])
-            player_id = int(columns[3].a["href"].split("/")[-1])
-            to_int_columns = [5, 6, 7, 9, 11, 12, 14]
-            to_parse_from_k_columns = [8, 15, 17, 16]
-            kills, deaths, assists, last_hits, denies, gpm, xpm = map(lambda x: int(columns[x].text), to_int_columns)
-            net_worth, hero_damage, tower_damage, heal = map(
-                lambda x: self._parse_thousands_from_k(columns[x].text), to_parse_from_k_columns
+            try:
+                player_id = int(columns[3].a["href"].split("/")[-1])
+            except TypeError:
+                player_id = -1  # Anonymous player
+                is_anonymous = True
+
+            to_parse_columns = [5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 17]
+            if is_anonymous:
+                to_parse_columns = list(map(lambda x: x - 2, to_parse_columns))
+
+            kills, deaths, assists, net_worth, last_hits, denies, gpm, xpm, hero_damage, heal, tower_damage = map(
+                lambda x: self._parse_int_from_k(columns[x].text), to_parse_columns
             )
+
             heroes.append(
                 AdvancedMatchHero(
                     hero_name=hero_name,
@@ -114,11 +136,60 @@ class DotabuffParser:
 
         return match
 
-    def parse_profile(self, data: str) -> PlayerProfile:
+    def parse_profile(self, data: bytes) -> PlayerProfile:
         """Parse player profile data."""
-        return data
+        soup = BeautifulSoup(data)
 
-    def parse_records(self, data: str) -> List[Record]:
+        # profile info
+        profile_info = list(soup.find("div", {"class": "header-content-primary"}).children)
+        player_id = int(profile_info[0].a["href"].split("/")[-1])
+        nickname = profile_info[1].h1.text.replace("Overview", "")
+
+        # most played hero info
+        most_played_heroes = []
+        hero_overview = list(soup.find("div", {"class": "heroes-overview"}).children)
+
+        for div in hero_overview:
+            columns = list(div.children)
+            hero_name = " ".join(
+                [word.capitalize() for word in list(columns[0].children)[1].a["href"].split("/")[-1].split("-")]
+            )
+            matches_played = int(list(columns[1].children)[1].text)
+            winrate = float(list(columns[2].children)[1].text.replace("%", ""))
+            kda = float(list(columns[3].children)[1].text)
+
+            most_played_heroes.append(
+                OverviewHero(
+                    match_stats=AggregatedMatchStats(winrate=winrate, matches_played=matches_played, avg_kda=kda),
+                    hero_name=hero_name,
+                )
+            )
+
+        # aggregated match info
+        match_stats = {}
+        stats_table = soup.table
+        table_bodies = stats_table.find_all("tbody")
+
+        aggregated_match_types = [
+            *table_bodies[0].find_all("tr"),  # Overview
+            *table_bodies[1].find_all("tr"),  # Lobby Type
+            *table_bodies[2].find_all("tr"),  # Game Mode
+            *table_bodies[3].find_all("tr"),  # Team
+        ]
+
+        for row in aggregated_match_types:
+            columns = row.find_all("td")
+            title = columns[0].text
+            matches_played = int(columns[1].text.replace(",", ""))
+            winrate = float(columns[2].text.replace("%", ""))
+            match_stats[title] = AggregatedMatchStats(matches_played=matches_played, winrate=winrate)
+
+        profile = PlayerProfile(
+            match_stats=match_stats, player_id=player_id, nickname=nickname, most_played_heroes=most_played_heroes
+        )
+        return profile
+
+    def parse_records(self, data: bytes) -> List[Record]:
         """Parse player record data."""
         records = []
         soup = BeautifulSoup(data)
@@ -134,24 +205,22 @@ class DotabuffParser:
         for title, value, hero, detail in components_gathered:
             # parse hero component
             hero_parsed = hero.text.split(" ")
-            hero_name = hero_parsed[0]
-            duration = self._parse_time(hero_parsed[1].strip("(").strip(")"))
+            hero_name = " ".join(hero_parsed[:-1])
+            duration = self._parse_time(hero_parsed[-1].strip("(").strip(")"))
 
             title = title.text
             value = value.text
             timestamp = datetime.fromisoformat(detail.time["datetime"])
 
             # parse details component
-            details_parsed = [item.strip(" ") for item in details.text.split(",")]
+            details_parsed = [item.strip(" ") for item in detail.text.split(",")]
             game_result = details_parsed[0].split(" ")[0]
             lobby_type = details_parsed[1]
             game_mode = details_parsed[2]
 
             match_info = MatchInfo(lobby_type=lobby_type, game_mode=game_mode, timestamp=timestamp, duration=duration)
             records.append(
-                Record(
-                    value=value, game_result=game_result, result_name=title, hero_name=hero_name, match_info=match_info
-                )
+                Record(value=value, result=game_result, record_name=title, hero_name=hero_name, match_info=match_info)
             )
 
         return records

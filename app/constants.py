@@ -1,15 +1,30 @@
 from enum import Enum
+from typing import Any, List
 
 
-class LobbyType(Enum):
+class ListedEnum(Enum):
+    """Listed enum that inherits enum.Enum but implements list method to get all possible values."""
+
+    @classmethod
+    def list(cls) -> List[Any]:
+        """Return list of possible enum values."""
+        return [c.value for c in cls]
+
+
+class LobbyType(ListedEnum):
+    """Enum with all possible lobby types."""
+
     RANKED = "Ranked"
     NORMAL = "Normal"
-    TOURNAMENT = "Tourna"  # TODO: Add tournament
-    UNKNOWN = "Unknow"  # TODO: Add Unknown
+    TOURNAMENT = "Tournament"
+    BATTLE_CUP = "Battle Cup"
+    UNKNOWN = "Unknown"
     BOT = "Bot"
 
 
-class GameMode(Enum):
+class GameMode(ListedEnum):
+    """Enum with all possible game modes."""
+
     ALL_PICK = "All Pick"
     TURBO = "Turbo"
     MUTATION = "Mutation"
@@ -27,12 +42,19 @@ class GameMode(Enum):
     CUSTOM_GAME = "Custom Game"
 
 
-class Team(Enum):
+class Team(ListedEnum):
+    """Enum with possible teams."""
+
     RADIANT = "Radiant"
     DIRE = "Dire"
 
 
-class GameResult(Enum):
+class GameResult(ListedEnum):
+    """Enum with possible game results."""
+
     WON = "Won"
     LOST = "Lost"
     ABANDONED = "Abandoned"
+
+
+ALLOWED_MATCH_AGGREGATION_KEYS = [*Team.list(), *LobbyType.list(), *GameMode.list(), "Other"]

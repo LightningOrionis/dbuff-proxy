@@ -2,9 +2,13 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.exceptions import ItemNotFoundError, RateLimitExceededError, UnhandledExternalError
-from app.services.client import DotabuffClient
+from app.exceptions import (
+    ItemNotFoundError,
+    RateLimitExceededError,
+    UnhandledExternalError,
+)
 from app.router import router
+from app.services.client import DotabuffClient
 from settings import CLIENTS
 
 app = FastAPI()
@@ -13,6 +17,7 @@ app.include_router(router)
 
 @app.get("/health")
 def get_health() -> dict:
+    """Health endpoint."""
     return {"health": "ok"}
 
 
@@ -29,13 +34,13 @@ async def handle_not_found_error(request: Request, exc: ItemNotFoundError) -> JS
 
 
 @app.exception_handler(RateLimitExceededError)
-async def handle_not_found_error(request: Request, exc: ItemNotFoundError) -> JSONResponse:
+async def handle_rate_limit_error(request: Request, exc: ItemNotFoundError) -> JSONResponse:
     """Handle ItemNotFoundError."""
     return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded. Try again later."})
 
 
 @app.exception_handler(UnhandledExternalError)
-async def handle_not_found_error(request: Request, exc: ItemNotFoundError) -> JSONResponse:
+async def handle_external_unhandled_error(request: Request, exc: ItemNotFoundError) -> JSONResponse:
     """Handle ItemNotFoundError."""
     return JSONResponse(status_code=500, content={"detail": "Unknown error occurred."})
 

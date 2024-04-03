@@ -1,0 +1,38 @@
+repos:
+-   repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+    -   id: black
+        name: black
+        entry: black
+        args: ["--line-length", "120"]
+-   repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+    -   id: isort
+        name: isort
+        entry: isort
+        args: ["--profile", "black"]
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.981
+    hooks:
+    -   id: mypy
+        name: mypy
+        additional_dependencies: [types-all]
+-   repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+    -   id: flake8
+        name: flake8
+        entry: flake8
+        additional_dependencies: [flake8-bugbear, flake8-debugger, flake8-docstrings, radon, flake8-todo, flake8-variables-names, flake8-builtins]
+-   repo: local
+    hooks:
+    -   id: pytest
+        stages: [push]
+        name: pytest
+        entry: cd app/ && export PYTHONPATH="." && pytest /app/
+        language: python
+        additional_dependencies: [pytest, factory_boy]
+        always_run: true
+        pass_filenames: false

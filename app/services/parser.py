@@ -33,13 +33,13 @@ class DotabuffParser:
 
     def _parse_int_from_k(self, s: str) -> int:
         """Parse K to thousands, e.g. 24.1K -> 24100."""
-        s = s.replace("k", "")
-        s = s.replace("-", "0.0")
+        s = s.replace("k", "").replace("-", "0.0")
 
         try:
             thousands, hundreds = [int(i) for i in s.split(".")]
         except ValueError:
             return int(s)
+
         return thousands * 1000 + hundreds * 100
 
     def parse_matches(self, data: bytes) -> List[PlayerMatch]:
@@ -130,6 +130,7 @@ class DotabuffParser:
             )
 
         winner = soup.find("div", {"class": "match-result"}).text.split(" ")[0]
+
         match = Match(
             match_info=match_info, winner=winner, players={Team.RADIANT.value: heroes[:5], Team.DIRE.value: heroes[5:]}
         )
@@ -187,6 +188,7 @@ class DotabuffParser:
         profile = PlayerProfile(
             match_stats=match_stats, player_id=player_id, nickname=nickname, most_played_heroes=most_played_heroes
         )
+
         return profile
 
     def parse_records(self, data: bytes) -> List[Record]:

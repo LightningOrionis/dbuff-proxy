@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List
+from typing import Any, Dict, List
 
 from httpx import AsyncClient, HTTPStatusError, Response
 
@@ -17,22 +17,30 @@ class DotabuffClient:
     """Dotabuff service to request data."""
 
     DOTABUFF_BASE_URL = settings.DOTABUFF_BASE_URL
+    ERROR_STATUS_CODE_DICT: Dict[int, HTTPStatusError] = {
+        404: ItemNotFoundError,
+        429: RateLimitExceededError,
+    }
 
     def __init__(self) -> None:
         """Init method."""
         self.parser = DotabuffParser()
+
+    @property
+    def headers(self) -> Dict[str, Any]:
+        """Headers for client."""
+        return {"User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0"}
 
     def _raise_for_status(self, response: Response) -> None:
         """Raise for response status to check errors."""
         try:
             response.raise_for_status()
         except HTTPStatusError as exc:
-            if response.status_code == 404:
-                raise ItemNotFoundError(str(exc))
-            elif response.status_code == 429:
-                raise RateLimitExceededError(str(exc))
+            args, kwargs = [str(exc)], {"request": exc.request, "response": exc.response}
+            if error := self.ERROR_STATUS_CODE_DICT.get(response.status_code):
+                raise error(*args, **kwargs)
             elif response.status_code > 500:
-                raise UnhandledExternalError(str(exc))
+                raise UnhandledExternalError(*args, **kwargs)
             else:
                 raise exc
 
@@ -41,10 +49,8 @@ class DotabuffClient:
         if query_params is None:
             query_params = {}
 
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0"}
-
         async with AsyncClient(base_url=self.DOTABUFF_BASE_URL) as client:
-            response = await client.get(url, params=query_params, headers=headers)
+            response = await client.get(url, params=query_params, headers=self.headers)
 
         self._raise_for_status(response)
 

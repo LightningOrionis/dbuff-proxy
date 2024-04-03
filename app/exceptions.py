@@ -1,13 +1,13 @@
-from requests.exceptions import HTTPError
+from httpx import HTTPStatusError
 
 
-class ItemNotFoundError(HTTPError):
+class ItemNotFoundError(HTTPStatusError):
     """ItemNotFoundError."""
 
 
-class UnhandledExternalError(HTTPError):
+class UnhandledExternalError(HTTPStatusError):
     """Exception for unhandled errors on dotabuff side."""
 
 
-class RateLimitExceededError(HTTPError):
+class RateLimitExceededError(HTTPStatusError):
     """Exception for 429 response."""
